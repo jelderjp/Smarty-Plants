@@ -15,6 +15,7 @@
 #include <Adafruit_MQTT.h>
 #include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
 #include "Adafruit_MQTT/Adafruit_MQTT.h"
+#include "HX711.h"
 
 TCPClient TheClient; 
 Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY); 
@@ -32,9 +33,15 @@ Adafruit_SSD1306 display(OLED_RESET);
 Adafruit_BME280 bme;
 AirQualitySensor airSensor(A5);
 IoTTimer pumpTimer;
+HX711 myScale (D2, D6);  //pins connected to hx711
 
 const int soilSensor = A0;
 const int pump = D9;
+const int CALFACTOR = 700; 
+const int SAMPLES = 10;
+const int DRY_THRESHOLD = 1100;
+float weight, rawData, calibration;
+int offset;
 bool status;
 bool bmeStatus = false;
 bool pumpRunning = false;
@@ -46,6 +53,7 @@ float tempF = 0;
 float pressurePa = 0;
 float pressureInHg = 0;
 float humid = 0;
+float reservoirWeight = 0;
 int soilRead;
 int readSoilAverage();
 int airQuality = 0;
@@ -71,6 +79,12 @@ void setup() {
   Serial.begin(9600);
     waitFor(Serial.isConnected, 10000);
 
+    myScale.set_scale();
+    delay (5000);
+    myScale.tare(); 
+    myScale.set_scale (CALFACTOR);
+    delay(3000);
+    
     pinMode(soilSensor, INPUT);
 
     mqtt.subscribe(&pumpFeed);
@@ -98,9 +112,16 @@ void setup() {
 
 
 void loop() {
-   
+    
+
     MQTT_connect();
     MQTT_ping();
+    weight = myScale.get_units() *-1;
+        delay(5000);
+        Serial.printf("Raw data = %f\nWeight = %f\n", rawData,weight);
+    reservoirWeight = myScale.get_units() *-1;
+    updateReservoirStatus();
+    
     Adafruit_MQTT_Subscribe *subscription;
     while ((subscription = mqtt.readSubscription(100))) {
         if (subscription == &pumpFeed) {
@@ -125,16 +146,19 @@ void loop() {
             pumpRunning = false;
         }       
        
-        if (soilRead < 1700 && !pumpRunning && millis() - lastWaterTime > 30000) {
+        if (soilRead > DRY_THRESHOLD && !pumpRunning && millis() - lastWaterTime > 30000 && wateringEnabled) {
             digitalWrite(pump, HIGH);
             pumpRunning = true;
             pumpTimer.startTimer(2000);
             lastWaterTime = millis();
             Serial.printf("Auto watering triggered.");
 
-
     }
 
+        if (!wateringEnabled) {
+            digitalWrite(pump, LOW);
+            Serial.println("Auto watering blocked: low reservoir.");
+        }
 
     if (millis() - lastReadMs >= 8000) {
         lastReadMs = millis();
@@ -197,6 +221,25 @@ void loop() {
             }
         }
 }
+    void startPump() {
+        if (!pumpRunning && wateringEnabled) {
+        digitalWrite(pump, HIGH);   // active-high relay: HIGH = ON
+        pumpRunning = true;
+        pumpTimer.startTimer(2000);
+        lastWaterTime = millis();
+    }
+}
+    void updateReservoirStatus() {
+    if (reservoirWeight <= 900) {
+        lowWater = true;
+        wateringEnabled = false;
+    } else {
+        lowWater = false;
+        wateringEnabled = true;
+    }
+}
+
+
     float tempToFah(float measurement) {
     return (9.0 / 5.0) * measurement + 32.0;
 }
@@ -210,7 +253,7 @@ void loop() {
 
             for (int i = 0; i < samples; i++){
                 total += analogRead(soilSensor);
-                delay(100);
+                delay(10);
             }
             return total / samples;
         }
