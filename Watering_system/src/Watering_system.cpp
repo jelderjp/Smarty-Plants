@@ -28,14 +28,13 @@ Adafruit_MQTT_Publish pubHumid = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/fee
 
 SYSTEM_MODE(AUTOMATIC);
 
-
+const int OLED_RESET=-1;
 Adafruit_SSD1306 display(OLED_RESET);
 Adafruit_BME280 bme;
 AirQualitySensor airSensor(A0);
 IoTTimer pumpTimer;
 HX711 myScale (D2, D6);  //pins connected to hx711
 
-const int OLED_RESET=-1;
 const int soilSensor = A5;
 const int pump = D9;
 const int CALFACTOR = 700; 
