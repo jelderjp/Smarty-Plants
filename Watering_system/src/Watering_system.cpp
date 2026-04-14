@@ -36,7 +36,7 @@ IoTTimer pumpTimer;
 HX711 myScale (D2, D6);  //pins connected to hx711
 
 const int soilSensor = A5;
-const int pump = D9;
+const int pump = S4;
 const int CALFACTOR = 700; 
 const int SAMPLES = 10;
 const int DRY_THRESHOLD = 1100;
@@ -73,10 +73,10 @@ unsigned int lastWaterTime = 0;
 
 
 void setup() {
-   pinMode(pump, OUTPUT);
+    pinMode(pump, OUTPUT);
     digitalWrite(pump, LOW);
 
-  Serial.begin(9600);
+    Serial.begin(9600);
     waitFor(Serial.isConnected, 10000);
 
     myScale.set_scale();
@@ -128,15 +128,13 @@ void loop() {
             pumpCommand = atoi((char *)pumpFeed.lastread);
             Serial.printf("Pump feed value: %i\n", pumpCommand);
             delay(500);
-            if (pumpCommand = 1 && lastPumpCommand == 0 && !pumpRunning) {
+            if ((pumpCommand == 1) && (lastPumpCommand == 0) && !pumpRunning) {
                  digitalWrite(pump, HIGH);
                  pumpRunning = true;
                  pumpTimer.startTimer(2000);
                  Serial.printf("Pump started from MQTT");
             }
             lastPumpCommand = pumpCommand;     
-         //if(pumpTimer.isTimerReady()){
-           // digitalWrite(pump,LOW);
             
         }
 
@@ -146,7 +144,7 @@ void loop() {
             pumpRunning = false;
         }       
        
-        if (soilRead > DRY_THRESHOLD && !pumpRunning && millis() - lastWaterTime > 30000 && wateringEnabled) {
+        if ((soilRead > DRY_THRESHOLD) && (!pumpRunning) && (millis() - lastWaterTime > 30000) && (wateringEnabled)) {
             digitalWrite(pump, HIGH);
             pumpRunning = true;
             pumpTimer.startTimer(2000);
